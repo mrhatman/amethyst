@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog][kc], and this project adheres to
 * `AmethystApplication` takes in `SystemDesc`s through `with_system_desc`. ([#1882])
 * `AmethystApplication::with_thread_local_desc` takes in `RunNowDesc`. ([#1882])
 * Add `NineSlice` support to `UiImage`. ([#1896])
+* `RenderingBundle` for full manual control of the rendering pipeline via a custom `GraphCreator` ([#1839]).
+* `CameraOrtho::new` takes in `CameraOrthoWorldCoordinates`, which can be set to custom dimensions. ([#1916])
 
 ### Changed
 
@@ -31,7 +33,12 @@ The format is based on [Keep a Changelog][kc], and this project adheres to
 * `AmethystApplication::with_thread_local` constraint relaxed to `RunNow` (previously `System`). ([#1882])
 * `SystemDesc` proc macro supports `#[system_desc(event_reader_id)]` to register event reader. ([#1883])
 * `SystemDesc` proc macro supports `#[system_desc(flagged_storage_reader(Component))]`. ([#1886])
+* Use `SystemDesc` derive to generate `SystemDesc` implementations for common case systems. ([#1887])
 * `DispatcherOperation` stores system name and dependencies as `String`s. ([#1891])
+* `TextureProcessor` renamed to `TextureProcessorSystem`. ([#1839])
+* `MeshProcessor` renamed to `MeshProcessorSystem`. ([#1839])
+* `AmethystApplication::with_setup` now takes in `FnOnce(&mut World) + Send + 'static`. ([#1912])
+* `AmethystApplication::with_setup` runs the function before the dispatcher. ([#1912])
 
 ### Fixed
 
@@ -45,8 +52,12 @@ The format is based on [Keep a Changelog][kc], and this project adheres to
 [#1882]: https://github.com/amethyst/amethyst/pull/1882
 [#1883]: https://github.com/amethyst/amethyst/pull/1883
 [#1886]: https://github.com/amethyst/amethyst/pull/1886
+[#1887]: https://github.com/amethyst/amethyst/pull/1887
 [#1891]: https://github.com/amethyst/amethyst/pull/1891
 [#1896]: https://github.com/amethyst/amethyst/pull/1896
+[#1839]: https://github.com/amethyst/amethyst/pull/1839
+[#1912]: https://github.com/amethyst/amethyst/pull/1912
+[#1916]: https://github.com/amethyst/amethyst/pull/1916
 
 ## [0.12.0] - 2019-07-30
 
