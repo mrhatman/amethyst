@@ -32,8 +32,10 @@ use amethyst_rendy::rendy::hal::command::{ClearDepthStencil, ClearValue};
 use amethyst_rendy::Kind;
 use amethyst_rendy::submodules::TextureSub;
 use amethyst_rendy::rendy::texture::image::{load_from_image, ImageTextureConfig, TextureKind, Repr};
-use amethyst_rendy::rendy::resource::{SamplerInfo, Filter, WrapMode, Image, Handle as RendyHandle, ImageView, ImageViewInfo, SubresourceRange, ViewKind, DescriptorSetLayout, Escape, DescriptorSet};
+use amethyst_rendy::rendy::resource::{SamplerInfo, Filter, WrapMode, Image, Handle as RendyHandle, ImageView, ImageViewInfo, SubresourceRange, ViewKind, DescriptorSetLayout, Escape, DescriptorSet, Sampler};
 use failure::_core::num::Wrapping;
+use amethyst_window::ScreenDimensions;
+use failure::ResultExt;
 
 
 lazy_static::lazy_static! {
@@ -108,16 +110,14 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
         // get view on offscreen image
         let image = ctx.get_image(self.image_ID).unwrap();
 
-
-
-        let view = factory.create_image_view(image.clone(), ImageViewInfo {
+        let view = factory.create_image_view((*image).clone(), ImageViewInfo {
             view_kind: ViewKind::D2,
             format:hal::format::Format::Rgba8Unorm,
             swizzle:hal::format::Swizzle::NO,
             range: SubresourceRange {
                 aspects:hal::format::Aspects::COLOR,
-                levels:0..1,
-                layers:0..1,
+                levels:0..image.levels(),
+                layers:0..image.layers(),
             }
         }).unwrap();
 
@@ -126,10 +126,10 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
             factory
             .create_descriptor_set_layout(vec![hal::pso::DescriptorSetLayoutBinding {
                 binding: 0,
-                ty: pso::DescriptorType::SampledImage,
+                ty: pso::DescriptorType::CombinedImageSampler,
                 count: 1,
                 stage_flags: pso::ShaderStageFlags::FRAGMENT,
-                immutable_samplers: true,
+                immutable_samplers: false,
             }])
             .unwrap()
         );
@@ -138,15 +138,30 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
 
         // write to the texture description set
 
+                // make a sampler
+        let sampler = factory.create_sampler(SamplerInfo {
+            min_filter:hal::image::Filter::Linear,
+            mag_filter:hal::image::Filter::Linear,
+            mip_filter:hal::image::Filter::Linear,
+            wrap_mode:(hal::image::WrapMode::Border,hal::image::WrapMode::Border,hal::image::WrapMode::Border),
+            lod_bias:hal::image::Lod::ZERO,
+            lod_range:hal::image::Lod::ZERO .. hal::image::Lod::MAX,
+            comparison:None,
+            border:[0.0,0.0,0.0,0.0].into(),
+            normalized:true,
+            anisotropic:hal::image::Anisotropic::Off
+        }).unwrap();
+
         unsafe {
             factory.device().write_descriptor_sets(vec![
                 hal::pso::DescriptorSetWrite {
                     set: texture_set.raw(),
                     binding: 0,
                     array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(
+                    descriptors: Some(pso::Descriptor::CombinedImageSampler (
                         view.raw(),
-                        hal::image::Layout::ColorAttachmentOptimal,
+                        hal::image::Layout::General,
+                        sampler.raw()
                     ))
                 }
             ]);
@@ -169,7 +184,8 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
             vertex_count: 0,
             change: Default::default(),
             texture_set,
-            view
+            view,
+            sampler
         }))
     }
 }
@@ -184,6 +200,7 @@ pub struct DrawCustom<B: Backend> {
     change: ChangeDetection,
     texture_set: Escape<DescriptorSet<B>>,
     view: Escape<ImageView<B>>,
+    sampler: Escape<Sampler<B>>,
 }
 
 impl<B: Backend> RenderGroup<B, World> for DrawCustom<B> {
@@ -220,7 +237,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawCustom<B> {
 
 
         // Return with we can reuse the draw buffers using the utility struct ChangeDetection
-        self.change.prepare_result(index, changed)
+        PrepareResult::DrawRecord
     }
 
     fn draw_inline(
@@ -336,10 +353,11 @@ impl<B: Backend> RenderPlugin<B> for RenderCustom {
         &mut self,
         plan: &mut RenderPlan<B>,
         _factory: &mut Factory<B>,
-        _world: &World,
+        world: &World,
     ) -> Result<(), Error> {
+        let dimensions = world.fetch::<ScreenDimensions>();
 
-        let kind = Kind::D2(1 as u32, 1 as u32, 1, 1);
+        let kind = Kind::D2(dimensions.width() as u32, dimensions.height() as u32, 1, 1);
         let depth_options = ImageOptions {
             kind: kind,
             levels: 1,
@@ -354,7 +372,7 @@ impl<B: Backend> RenderPlugin<B> for RenderCustom {
                     kind:kind,
                     levels: 1,
                     format: Format::Rgba8Unorm,
-                    clear: Some(ClearValue::Color([0.0, 0.0, 0.0, 1.0].into())),
+                    clear: None,
                 })],
                 depth: Some(depth_options)
             }
@@ -365,7 +383,7 @@ impl<B: Backend> RenderPlugin<B> for RenderCustom {
         plan.extend_target(Target::Main, |ctx| {
             // Add our Description
             let image_ID = ctx.get_image(TargetImage::Color(Target::Custom("Logo") , 0)).unwrap();
-            ctx.add(RenderOrder::Transparent, DrawCustomDesc::new(image_ID).builder())?;
+            ctx.add(RenderOrder::Opaque, DrawCustomDesc::new(image_ID).builder())?;
             Ok(())
         });
         Ok(())
