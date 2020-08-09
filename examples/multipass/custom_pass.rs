@@ -109,19 +109,6 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
         let image = ctx.get_image(self.image_ID).unwrap();
 
 
-        // make a sampler
-        let sampler = factory.create_sampler(SamplerInfo {
-            min_filter:hal::image::Filter::Linear,
-            mag_filter:hal::image::Filter::Linear,
-            mip_filter:hal::image::Filter::Linear,
-            wrap_mode:(hal::image::WrapMode::Border,hal::image::WrapMode::Border,hal::image::WrapMode::Border),
-            lod_bias:hal::image::Lod::ZERO,
-            lod_range:hal::image::Lod::ZERO .. hal::image::Lod::MAX,
-            comparison:None,
-            border:[0.0,0.0,0.0,0.0].into(),
-            normalized:true,
-            anisotropic:hal::image::Anisotropic::Off
-        }).unwrap();
 
         let view = factory.create_image_view(image.clone(), ImageViewInfo {
             view_kind: ViewKind::D2,
@@ -139,7 +126,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
             factory
             .create_descriptor_set_layout(vec![hal::pso::DescriptorSetLayoutBinding {
                 binding: 0,
-                ty: pso::DescriptorType::CombinedImageSampler,
+                ty: pso::DescriptorType::SampledImage,
                 count: 1,
                 stage_flags: pso::ShaderStageFlags::FRAGMENT,
                 immutable_samplers: true,
@@ -157,10 +144,9 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
                     set: texture_set.raw(),
                     binding: 0,
                     array_offset: 0,
-                    descriptors: Some(pso::Descriptor::CombinedImageSampler(
+                    descriptors: Some(pso::Descriptor::Image(
                         view.raw(),
-                        hal::image::Layout::ShaderReadOnlyOptimal,
-                        sampler.raw()
+                        hal::image::Layout::ColorAttachmentOptimal,
                     ))
                 }
             ]);
@@ -182,7 +168,8 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCustomDesc {
             vertex,
             vertex_count: 0,
             change: Default::default(),
-            texture_set
+            texture_set,
+            view
         }))
     }
 }
@@ -196,6 +183,7 @@ pub struct DrawCustom<B: Backend> {
     vertex_count: usize,
     change: ChangeDetection,
     texture_set: Escape<DescriptorSet<B>>,
+    view: Escape<ImageView<B>>,
 }
 
 impl<B: Backend> RenderGroup<B, World> for DrawCustom<B> {
